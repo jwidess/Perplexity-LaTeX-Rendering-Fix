@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Perplexity LaTeX Rendering Fix
 // @namespace    https://github.com/jwidess/Perplexity-LaTeX-Rendering-Fix
-// @version      5.1
+// @version      5.2
 // @description  Intercepts API responses and fixes ($...$) to the correct format (\(...\)) for LaTeX rendering
 // @author       Jwidess
 // @match        https://www.perplexity.ai/*
@@ -14,6 +14,9 @@
 
     const DEBUG = false;
     const STATS = { processed: 0, modified: 0, errors: 0 };
+    
+    // Track if modifications were made in current processing
+    let hasModifications = false;
 
     // Function to convert LaTeX syntax
     function fixLatexSyntax(text) {
@@ -50,6 +53,7 @@
         
         if (original !== fixed) {
             STATS.modified++;
+            hasModifications = true;
             if (DEBUG) {
                 console.log('LaTeX fixed:', { original: original.substring(0, 100), fixed: fixed.substring(0, 100) });
             }
@@ -114,17 +118,24 @@
             if (contentType.includes('application/json')) {
                 try {
                     const data = await clonedResponse.json();
+                    hasModifications = false; // Reset flag
                     const fixedData = fixObjectLatex(data);
                     
-                    if (DEBUG) {
-                        console.log('Processed JSON from:', url);
+                    // Only return modified response if we actually made changes
+                    if (hasModifications) {
+                        if (DEBUG) {
+                            console.log('Processed and modified JSON from:', url);
+                        }
+                        
+                        return new Response(JSON.stringify(fixedData), {
+                            status: response.status,
+                            statusText: response.statusText,
+                            headers: response.headers
+                        });
                     }
                     
-                    return new Response(JSON.stringify(fixedData), {
-                        status: response.status,
-                        statusText: response.statusText,
-                        headers: response.headers
-                    });
+                    // No changes made, return original response
+                    return response;
                 } catch (e) {
                     STATS.errors++;
                     if (DEBUG) console.error('JSON processing error:', e);
@@ -207,19 +218,23 @@
                     const contentType = xhr.getResponseHeader('content-type') || '';
                     if (contentType.includes('application/json')) {
                         const data = JSON.parse(xhr.responseText);
+                        hasModifications = false; // Reset flag
                         const fixedData = fixObjectLatex(data);
                         
-                        Object.defineProperty(xhr, 'responseText', {
-                            writable: true,
-                            value: JSON.stringify(fixedData)
-                        });
-                        Object.defineProperty(xhr, 'response', {
-                            writable: true,
-                            value: JSON.stringify(fixedData)
-                        });
-                        
-                        if (DEBUG) {
-                            console.log('Processed XHR from:', url);
+                        // Only modify response if changes were made
+                        if (hasModifications) {
+                            Object.defineProperty(xhr, 'responseText', {
+                                writable: true,
+                                value: JSON.stringify(fixedData)
+                            });
+                            Object.defineProperty(xhr, 'response', {
+                                writable: true,
+                                value: JSON.stringify(fixedData)
+                            });
+                            
+                            if (DEBUG) {
+                                console.log('Processed and modified XHR from:', url);
+                            }
                         }
                     }
                 } catch (e) {
@@ -249,6 +264,6 @@
         console.log('To enable debug mode, run: window.latexFixerDebug = true');
     };
 
-    console.log('Perplexity LaTeX fixer v5.1 loaded');
+    console.log('Perplexity LaTeX fixer v5.2 loaded');
     console.log('Run latexFixerStats() in console to see statistics');
 })();
