@@ -42,12 +42,7 @@
             if (words.length > 15) {
                 return match; // Keep original
             }
-            
-            // skip price e.g. "$6.99" or "$19.99" (must have decimal with cents) but $0$ or $50$ is math
-            if (/^\d+\.\d{2}$/.test(p1.trim())) {
-                return match;
-            }
-            
+  
             return `\\(${p1}\\)`;
         });
         
